@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pipeline Control</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { margin: 10px; padding: 10px 15px; }
+    select { padding: 5px; margin-right: 10px; }
+    #status { margin: 10px 0; font-weight: bold; color: green; }
+    #log-output { background: #f0f0f0; padding: 10px; margin-top: 10px; border: 1px solid #ccc; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    #stream-view { width: 80%; border: 2px solid #444; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h2>Select Pipeline</h2>
+  <select id="script-select"></select>
+  <button onclick="runScript()">Run</button>
+  <button onclick="stopScript()">Stop</button>
+
+  <div id="status">[Idle]</div>
+  <div id="log-output"></div>
+
+  <h3>Live Video Stream</h3>
+  <img id="stream-view" src="/mjpeg/raw" />
+
+  <script>
+    async function loadScripts() {
+      const res = await fetch('/scripts');
+      const list = await res.json();
+      const sel = document.getElementById('script-select');
+      list.forEach(name => sel.add(new Option(name)));
+    }
+
+    function switchStream(toAnnotated) {
+      const streamView = document.getElementById('stream-view');
+      const newSrc = toAnnotated ? '/mjpeg/annotated' : '/mjpeg/raw';
+      streamView.src = newSrc;
+    }
+
+    async function runScript() {
+      const status = document.getElementById('status');
+      const logOutput = document.getElementById('log-output');
+      const name = document.getElementById('script-select').value;
+      if (!name) {
+        status.textContent = '❌ No script selected';
+        status.style.color = 'red';
+        return;
+      }
+
+      try {
+        const res = await fetch('/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+
+        const text = await res.text();
+        if (res.ok) {
+          status.textContent = `✅ Running ${name}`;
+          status.style.color = 'green';
+          logOutput.textContent = text;
+          switchStream(true);
+        } else {
+          status.textContent = `❌ ${text}`;
+          status.style.color = 'red';
+          logOutput.textContent = text;
+        }
+      } catch (err) {
+        status.textContent = `❌ Error: ${err}`;
+        status.style.color = 'red';
+        logOutput.textContent = String(err);
+      }
+    }
+
+    async function stopScript() {
+      const status = document.getElementById('status');
+      const logOutput = document.getElementById('log-output');
+      try {
+        const res = await fetch('/stop', { method: 'POST' });
+        const text = await res.text();
+        if (res.ok) {
+          status.textContent = '⏹️ Pipeline stopped';
+          status.style.color = 'black';
+          logOutput.textContent = text;
+          switchStream(false);
+        } else {
+          status.textContent = `❌ ${text}`;
+          status.style.color = 'red';
+          logOutput.textContent = text;
+        }
+      } catch (err) {
+        status.textContent = `❌ Error: ${err}`;
+        status.style.color = 'red';
+        logOutput.textContent = String(err);
+      }
+    }
+
+    window.onload = () => {
+      loadScripts();
+      switchStream(false);
+    };
+  </script>
+</body>
+</html>
