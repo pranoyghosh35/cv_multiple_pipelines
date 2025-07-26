@@ -1,27 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF‑8">
   <title>Pipeline Control</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    button { margin: 10px; padding: 10px 15px; }
-    select { padding: 5px; margin-right: 10px; }
-    #status { margin: 10px 0; font-weight: bold; color: green; }
-    #log-output { background: #f0f0f0; padding: 10px; margin-top: 10px; border: 1px solid #ccc; white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
-    #stream-view { width: 80%; border: 2px solid #444; padding: 5px; }
+    body { font-family: sans-serif; padding:20px; }
+    button { margin:10px; padding:10px 15px; font-size:16px; cursor:pointer; }
+    select { padding:5px; margin-right:10px; font-size:16px; }
+    #status { margin:10px 0; font-weight:bold; color:green; }
+    #log-output {
+      background:#f0f0f0; padding:10px; margin-top:10px;
+      border:1px solid #ccc; white-space:pre-wrap;
+      max-height:200px; overflow-y:auto;
+    }
+    #metrics-display {
+      margin-top:10px; font-size:16px; background:#eef;
+      padding:10px; border-radius:6px; display:inline-block;
+    }
+    #stream-view {
+      width:80%; border:2px solid #444; padding:5px;
+    }
+    .metric-icon { margin-right:5px; }
+    .metric-label { font-weight: bold; margin-right: 3px; }
   </style>
 </head>
 <body>
   <h2>Select Pipeline</h2>
   <select id="script-select"></select>
-  <button onclick="runScript()">Run</button>
-  <button onclick="stopScript()">Stop</button>
+  <button onclick="runScript()">
+    <i class="fas fa-play-circle"></i> Run
+  </button>
+  <button onclick="stopScript()">
+    <i class="fas fa-stop-circle"></i> Stop
+  </button>
 
   <div id="status">[Idle]</div>
   <div id="log-output"></div>
 
-  <h3>Live Video Stream</h3>
+  <h3>📊 Metrics (avg over 5 frames)</h3>
+  <div id="metrics-display">
+    <i class="fas fa-stopwatch metric-icon"></i>
+      <span class="metric-label">Time:</span>
+      <span id="m-time">--</span>ms |  
+    <i class="fas fa-ram metric-icon"></i>
+      <span class="metric-label">RAM:</span>
+      <span id="m-ram">--</span>MB |  
+    <i class="fas fa-microchip metric-icon"></i>
+      <span class="metric-label">CPU:</span>
+      <span id="m-cpu">--</span>% |  
+    <i class="fab fa-nvidia metric-icon"></i>
+      <span class="metric-label">GPU:</span>
+      <span id="m-gpu">--</span>% |  
+    <i class="fas fa-database metric-icon"></i>
+      <span class="metric-label">GPU Mem:</span>
+      <span id="m-gpu-mem">--</span>MB
+  </div>
+
+  <h3>📹 Live Video Stream</h3>
   <img id="stream-view" src="/mjpeg/raw" />
 
   <script>
@@ -33,72 +70,85 @@
     }
 
     function switchStream(toAnnotated) {
-      const streamView = document.getElementById('stream-view');
-      const newSrc = toAnnotated ? '/mjpeg/annotated' : '/mjpeg/raw';
-      streamView.src = newSrc;
+      document.getElementById('stream-view').src =
+        toAnnotated ? '/mjpeg/annotated' : '/mjpeg/raw';
     }
 
     async function runScript() {
-      const status = document.getElementById('status');
-      const logOutput = document.getElementById('log-output');
-      const name = document.getElementById('script-select').value;
+      const status = document.getElementById('status'),
+            logs   = document.getElementById('log-output'),
+            name   = document.getElementById('script-select').value;
       if (!name) {
         status.textContent = '❌ No script selected';
         status.style.color = 'red';
         return;
       }
-
       try {
-        const res = await fetch('/run', {
+        const res  = await fetch('/run', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ name })
         });
-
         const text = await res.text();
         if (res.ok) {
           status.textContent = `✅ Running ${name}`;
           status.style.color = 'green';
-          logOutput.textContent = text;
+          logs.textContent = text;
           switchStream(true);
         } else {
           status.textContent = `❌ ${text}`;
           status.style.color = 'red';
-          logOutput.textContent = text;
+          logs.textContent = text;
         }
-      } catch (err) {
-        status.textContent = `❌ Error: ${err}`;
+      } catch (e) {
+        status.textContent = `❌ ${e}`;
         status.style.color = 'red';
-        logOutput.textContent = String(err);
+        logs.textContent = e;
       }
     }
 
     async function stopScript() {
-      const status = document.getElementById('status');
-      const logOutput = document.getElementById('log-output');
+      const status = document.getElementById('status'),
+            logs   = document.getElementById('log-output');
       try {
-        const res = await fetch('/stop', { method: 'POST' });
+        const res  = await fetch('/stop', { method: 'POST' });
         const text = await res.text();
         if (res.ok) {
           status.textContent = '⏹️ Pipeline stopped';
           status.style.color = 'black';
-          logOutput.textContent = text;
+          logs.textContent = text;
           switchStream(false);
         } else {
           status.textContent = `❌ ${text}`;
           status.style.color = 'red';
-          logOutput.textContent = text;
+          logs.textContent = text;
         }
-      } catch (err) {
-        status.textContent = `❌ Error: ${err}`;
+      } catch (e) {
+        status.textContent = `❌ ${e}`;
         status.style.color = 'red';
-        logOutput.textContent = String(err);
+        logs.textContent = e;
+      }
+    }
+
+    async function updateMetrics() {
+      try {
+        const data = await fetch('/metrics').then(r => r.json());
+        // convert seconds → milliseconds
+        document.getElementById('m-time').innerText    = Math.round(data.avg_time * 1000);
+        document.getElementById('m-ram').innerText     = data.ram_mb;
+        document.getElementById('m-cpu').innerText     = data.cpu_pct;
+        document.getElementById('m-gpu').innerText     = data.gpu_pct;
+        document.getElementById('m-gpu-mem').innerText = data.gpu_mem_mb;
+      } catch {
+        document.getElementById('metrics-display').innerText =
+          "❌ Failed to fetch metrics.";
       }
     }
 
     window.onload = () => {
       loadScripts();
       switchStream(false);
+      setInterval(updateMetrics, 2000);
     };
   </script>
 </body>
