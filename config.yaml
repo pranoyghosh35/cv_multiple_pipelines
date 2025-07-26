@@ -3,3 +3,6 @@ RAW_BROKER: 10.1.41.14:9095
 ANNOTATED_TOPIC: AnnotatedFramesTopic
 ANNOTATED_BROKER: 10.1.40.43:9092
 PIPELINE_DIR: pipelines
+YOLO_MODEL: weights/yolo11n.pt
+DIST_LABEL_FILE: weights/labels.txt
+MODEL_PATH: weights/best.pt
